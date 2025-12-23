@@ -1,119 +1,178 @@
-project:
-  name: Shelby Simple Python
-  description: >
-    Shelby Simple Python is a Python-based CLI (Command Line Interface) tool
-    designed to interact with the Shelby Protocol.
-    It allows users to manage wallets, claim faucets, check balances,
-    and upload files to the Shelby Network directly from the terminal.
+# 🛠️ Shelby Simple Python
 
-badges:
-  - Python: ">=3.8"
-  - Node.js: ">=16"
-  - Interface: CLI
-  - License: Not Specified
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![Node.js](https://img.shields.io/badge/Node.js-16%2B-green)
+![CLI](https://img.shields.io/badge/Interface-CLI-lightgrey)
+![License](https://img.shields.io/badge/License-Not%20Specified-red)
 
-features:
-  - Check APT & ShelbyUSD balance
-  - Claim ShelbyUSD faucet
-  - Claim APT faucet
-  - Upload files to Shelby Network (auto & custom destination)
-  - Automatically create a new wallet
-  - Sync private keys to pk.txt
-  - Interactive terminal-based menu
+**Shelby Simple Python** is a Python-based CLI (Command Line Interface) tool
+designed to interact with the **Shelby Protocol**.
 
-requirements:
-  python:
-    version: ">= 3.8"
-  nodejs:
-    version: ">= 16"
-  npm: required
-  git: required
-  shelby_cli:
-    description: Shelby Protocol CLI
-    install_command: npm install -g @shelby-protocol/cli
+This project helps users manage wallets, claim faucets, check balances,
+and upload files to the Shelby Network directly from the terminal.
 
-installation:
-  step_by_step:
-    - step: 1
-      title: Clone Repository
-      commands:
-        - git clone https://github.com/dani12po/shelby-simple-python.git
-        - cd shelby-simple-python
+---
 
-    - step: 2
-      title: Create Virtual Environment (Optional)
-      commands:
-        linux_macos:
-          - python3 -m venv venv
-          - source venv/bin/activate
-        windows:
-          - python -m venv venv
-          - venv\Scripts\activate
+## ✨ Features
 
-    - step: 3
-      title: Install Python Dependencies
-      commands:
-        - pip install -r requirements.txt
+* ✅ Check APT & ShelbyUSD balance
+* 💧 Claim ShelbyUSD faucet
+* 💧 Claim APT faucet
+* 📤 Upload files to Shelby Network (auto & custom destination)
+* 🔐 Automatically create a new wallet
+* 🔄 Sync private keys to `pk.txt`
+* 🖥️ Interactive terminal-based menu
 
-    - step: 4
-      title: Install Shelby CLI (Required)
-      commands:
-        - npm install -g @shelby-protocol/cli
-        - shelby --version
+---
 
-usage:
-  run:
-    command: python bot.py
-  menu:
-    - Check balance
-    - Claim ShelbyUSD faucet
-    - Claim APT faucet
-    - Upload file (auto destination)
-    - Upload file (custom destination)
-    - Create wallet & auto sync pk.txt
-    - Sync pk.txt from config.yaml
-    - Exit
+## 📦 Requirements
 
-project_structure:
-  root: shelby-simple-python
-  files:
-    - bot.py: Main Python CLI script
-    - bot.js: Optional JavaScript integration
-    - requirements.txt: Python dependency list
-    - package.json: Node.js dependency list
-    - pk.txt: Auto-generated private key file
-    - README.md: Project documentation
+Before installation, make sure you have:
 
-configuration:
-  optional_env:
-    file: .env
-    variables:
-      SHELBY_BIN: "/path/to/shelby"
-      APTOS_FAUCET_URL: "https://your-faucet-url"
-      DEST_PREFIX_IMAGE: "images/"
-      DEST_PREFIX_VIDEO: "videos/"
+* **Python** `>= 3.8`
+* **Node.js** `>= 16`
+* **npm`
+* **Git**
 
-security:
-  warnings:
-    - Never commit pk.txt to the repository
-    - Never share your private keys
-    - Always use testnet wallets for testing
-  gitignore_recommended:
-    - pk.txt
-    - .env
+---
 
-contribution:
-  guidelines: >
-    Contributions are welcome.
-    Feel free to open an issue for bug reports or feature requests,
-    or submit a pull request to improve the project.
+## 🚀 Installation (Step by Step)
 
-license:
-  status: Not specified
-  recommendation:
-    - MIT
-    - Apache-2.0
+### 1️⃣ Clone the Repository
 
-support:
-  message: >
-    If this project helps you, please consider giving it a star ⭐ on GitHub.
+```bash
+git clone https://github.com/dani12po/shelby-simple-python.git
+cd shelby-simple-python
+```
+
+---
+
+### 2️⃣ Create Virtual Environment (Optional but Recommended)
+
+**Linux / macOS**
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows**
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+---
+
+### 3️⃣ Install Python Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+### 4️⃣ Install Shelby CLI (Required)
+
+```bash
+npm install -g @shelby-protocol/cli
+```
+
+Verify installation:
+
+```bash
+shelby --version
+```
+
+---
+
+## ▶️ Usage
+
+Run the CLI tool:
+
+```bash
+python bot.py
+```
+
+You will see a menu like this:
+
+```
+Shelby Menu Bot
+===============
+1) Check balance
+2) Claim ShelbyUSD faucet
+3) Claim APT faucet
+4) Upload file (auto destination)
+5) Upload file (custom destination)
+6) Create wallet & auto sync pk.txt
+7) Sync pk.txt from config.yaml
+8) Exit
+```
+
+---
+
+## 📁 Project Structure
+
+```
+shelby-simple-python/
+│
+├── bot.py              # Main Python CLI script
+├── bot.js              # Optional JavaScript integration
+├── requirements.txt    # Python dependencies
+├── package.json        # Node.js dependencies
+├── pk.txt              # Auto-generated private key file
+└── README.md           # Documentation
+```
+
+---
+
+## ⚙️ Configuration (Optional)
+
+Create a `.env` file:
+
+```env
+SHELBY_BIN=/path/to/shelby
+APTOS_FAUCET_URL=https://your-faucet-url
+DEST_PREFIX_IMAGE=images/
+DEST_PREFIX_VIDEO=videos/
+```
+
+---
+
+## 🔐 Security Notes
+
+⚠️ **Important**
+
+* Never commit `pk.txt` to the repository
+* Never share your private keys
+* Always use **testnet wallets** for testing
+
+Add to `.gitignore`:
+
+```gitignore
+pk.txt
+.env
+```
+
+---
+
+## 🤝 Contribution
+
+Contributions are welcome!
+
+* Open an **issue** for bug reports or feature requests
+* Submit a **pull request** to improve the project
+
+---
+
+## 📜 License
+
+This project currently has **no license specified**.
+You may add one such as **MIT** or **Apache-2.0** if needed.
+
+---
+
+## ⭐ Support
+
+If
