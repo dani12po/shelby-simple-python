@@ -1,0 +1,23 @@
+{
+  "name": "shelby-cli-bot",
+  "version": "1.0.0",
+  "description": "A small automation wrapper (\u201cbot\u201d) around the Shelby CLI: upload/download/list/balance/watch.",
+  "type": "commonjs",
+  "main": "bot.js",
+  "scripts": {
+    "bot": "node bot.js",
+    "doctor": "node bot.js doctor",
+    "upload": "node bot.js upload",
+    "download": "node bot.js download",
+    "watch": "node bot.js watch-upload"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "execa": "^9.5.2",
+    "yargs": "^17.7.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
