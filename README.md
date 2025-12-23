@@ -175,4 +175,4 @@ You may add one such as **MIT** or **Apache-2.0** if needed.
 
 ## ⭐ Support
 
-If
+If project helps you, please consider giving it a ⭐ on GitHub.
