@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
-Shelby Menu Bot (Python) - Create Wallet + Auto Sync to pk.txt (NO yaml dependency)
+Shelby Menu Bot (Python) - Create Wallet + Auto Sync to pk.txt
+
+✅ Improvements in this version:
+- Auto-detect Shelby CLI (shelby / shelby.cmd) from PATH or npm global prefix
+- If missing, AUTO-INSTALL Shelby CLI via npm (best-effort)
+- Writes/updates .env with SHELBY_BIN automatically (so next run is smooth)
+- Windows-safe execution for .cmd/.bat using: cmd /c shelby.cmd ...
 
 Run:
   python bot.py
@@ -54,7 +60,7 @@ class Balance:
 
 
 # ----------------------------
-# Helpers
+# Helpers (UI)
 # ----------------------------
 def eprint(*a: object) -> None:
     print(*a, file=sys.stderr)
@@ -80,6 +86,10 @@ def bot_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def env_path() -> Path:
+    return bot_dir() / ".env"
+
+
 def pk_path() -> Path:
     # same directory as bot.py
     return bot_dir() / "pk.txt"
@@ -93,48 +103,255 @@ def shelby_config_path() -> Path:
     return Path.home() / ".shelby" / "config.yaml"
 
 
-def find_shelby_bin() -> str:
-    # recommended in .env (Windows): SHELBY_BIN=shelby.cmd
-    env_bin = os.getenv("SHELBY_BIN")
-    if env_bin:
-        return env_bin
+# ----------------------------
+# Shelby CLI auto-fix (NEW)
+# ----------------------------
+def _is_windows() -> bool:
+    return os.name == "nt"
 
-    for cand in ("shelby", "shelby.cmd", "shelby.exe"):
-        if shutil.which(cand):
-            return cand
-    return "shelby"
+
+def _which(cmd: str) -> Optional[str]:
+    return shutil.which(cmd)
+
+
+def _run(
+    args: list[str],
+    capture: bool = False,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    """
+    subprocess wrapper:
+    - UTF-8 decode (errors=replace) to avoid Unicode errors
+    - check=False by default; we handle errors ourselves for clearer messages
+    """
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    return subprocess.run(
+        args,
+        check=check,
+        text=True,
+        capture_output=capture,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+    )
+
+
+def _npm_bin() -> Optional[str]:
+    # Windows often has npm.cmd
+    if _is_windows():
+        return _which("npm.cmd") or _which("npm")
+    return _which("npm")
+
+
+def _npm_global_prefix(npm_bin: str) -> Optional[str]:
+    try:
+        p = _run([npm_bin, "config", "get", "prefix"], capture=True, check=False)
+        if p.returncode == 0:
+            s = (p.stdout or "").strip()
+            return s if s else None
+    except Exception:
+        pass
+    return None
+
+
+def _candidate_shelby_paths(prefix: str) -> list[str]:
+    pref = Path(prefix)
+    cands: list[str] = []
+    if _is_windows():
+        cands += [
+            str(pref / "shelby.cmd"),
+            str(pref / "shelby.bat"),
+            str(pref / "shelby.exe"),
+            str(pref / "shelby"),
+            str(pref / "bin" / "shelby.cmd"),
+            str(pref / "bin" / "shelby"),
+        ]
+    else:
+        cands += [
+            str(pref / "bin" / "shelby"),
+            str(pref / "shelby"),
+        ]
+    return cands
+
+
+def _save_env_key(key: str, value: str) -> None:
+    """
+    Update/append KEY=VALUE in .env (in the same folder as bot.py).
+    """
+    p = env_path()
+    lines: list[str] = []
+    if p.exists():
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+
+    found = False
+    out: list[str] = []
+    for line in lines:
+        if line.strip().startswith(f"{key}="):
+            out.append(f"{key}={value}")
+            found = True
+        else:
+            out.append(line)
+
+    if not found:
+        if out and out[-1].strip() != "":
+            out.append("")
+        out.append(f"{key}={value}")
+
+    p.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def resolve_shelby_bin() -> Optional[str]:
+    """
+    Try to find shelby executable.
+    Returns:
+      - absolute path (preferred) or command name that works on PATH
+      - None if not found
+    """
+    # 1) from env
+    env_bin = (os.getenv("SHELBY_BIN") or "").strip()
+    if env_bin:
+        # If it's a path
+        if Path(env_bin).expanduser().exists():
+            return env_bin
+        # If it's a command on PATH
+        w = _which(env_bin)
+        if w:
+            return w
+        # If user set "shelby.cmd" but PATH has it
+        w2 = _which(env_bin)
+        if w2:
+            return w2
+
+    # 2) from PATH (common names)
+    names = ["shelby"]
+    if _is_windows():
+        names = ["shelby.cmd", "shelby.bat", "shelby.exe", "shelby"]
+
+    for n in names:
+        w = _which(n)
+        if w:
+            return w
+
+    # 3) from npm global prefix
+    npm = _npm_bin()
+    if npm:
+        prefix = _npm_global_prefix(npm)
+        if prefix:
+            for c in _candidate_shelby_paths(prefix):
+                if Path(c).exists():
+                    return c
+
+    return None
+
+
+def install_shelby_cli() -> tuple[bool, str]:
+    npm = _npm_bin()
+    if not npm:
+        return False, (
+            "npm tidak ditemukan.\n"
+            "Fix:\n"
+            "  1) Install Node.js (LTS)\n"
+            "  2) Buka terminal baru\n"
+            "  3) Jalankan: npm -v"
+        )
+    try:
+        print("\n[INFO] Shelby CLI not found. Installing: npm i -g @shelby-protocol/cli ...")
+        r = _run([npm, "i", "-g", "@shelby-protocol/cli"], capture=True, check=False)
+        if r.returncode == 0:
+            return True, "Shelby CLI installed."
+        msg = (r.stderr or "").strip() or (r.stdout or "").strip() or "Unknown npm error."
+        return False, f"Gagal install Shelby CLI.\n{msg}"
+    except Exception as ex:
+        return False, f"Gagal install Shelby CLI: {ex}"
+
+
+def ensure_shelby_ready(auto_install: bool = True) -> str:
+    """
+    Ensure Shelby CLI exists, auto-install if needed.
+    Returns shelby bin path.
+    """
+    s = resolve_shelby_bin()
+    if s:
+        # persist for next runs
+        try:
+            _save_env_key("SHELBY_BIN", s)
+        except Exception:
+            pass
+        return s
+
+    if not auto_install:
+        raise RuntimeError(
+            "Command not found: shelby\n"
+            "Fix:\n"
+            "  1) Install Shelby CLI: npm i -g @shelby-protocol/cli\n"
+            "  2) Or set SHELBY_BIN in .env (Windows usually: shelby.cmd)\n"
+        )
+
+    ok, msg = install_shelby_cli()
+    if not ok:
+        raise RuntimeError(msg)
+
+    s2 = resolve_shelby_bin()
+    if not s2:
+        raise RuntimeError(
+            "Shelby CLI sudah di-install, tapi masih tidak ditemukan.\n"
+            "Coba:\n"
+            "  - Tutup terminal, buka lagi\n"
+            "  - Pastikan PATH npm global masuk environment\n"
+            "  - Atau set manual di .env: SHELBY_BIN=shelby.cmd (Windows) / SHELBY_BIN=shelby (Linux/mac)\n"
+        )
+
+    try:
+        _save_env_key("SHELBY_BIN", s2)
+    except Exception:
+        pass
+    print(f"[OK] Shelby CLI ready: {s2}")
+    return s2
+
+
+def build_shelby_cmd(shelby_bin: str, args: list[str]) -> list[str]:
+    """
+    Windows: if shelby_bin endswith .cmd/.bat, run through cmd /c
+    """
+    if _is_windows() and shelby_bin.lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c", shelby_bin, *args]
+    return [shelby_bin, *args]
 
 
 def run_cmd(args: list[str], capture: bool = False, check: bool = True) -> subprocess.CompletedProcess:
     """
-    Safe subprocess on Windows:
-    - Force UTF-8 decode, errors=replace => avoid UnicodeDecodeError
+    Backward-compatible wrapper.
+    If command missing, we raise friendly errors.
     """
     try:
-        env = os.environ.copy()
-        env.setdefault("PYTHONIOENCODING", "utf-8")
-
-        return subprocess.run(
-            args,
-            check=check,
-            text=True,
-            capture_output=capture,
-            encoding="utf-8",
-            errors="replace",
-            env=env,
-        )
+        proc = _run(args, capture=capture, check=False)
+        if check and proc.returncode != 0:
+            msg = (proc.stderr or "").strip() or (proc.stdout or "").strip() or f"Command failed: {args}"
+            raise RuntimeError(msg)
+        return proc
     except FileNotFoundError as ex:
+        # This can still happen if "cmd" not found (rare) or a wrong path is given.
         raise RuntimeError(
             f"Command not found: {args[0]}\n"
             "Fix:\n"
             "  1) Install Shelby CLI: npm i -g @shelby-protocol/cli\n"
             "  2) Or set SHELBY_BIN in .env (Windows usually: shelby.cmd)\n"
         ) from ex
-    except subprocess.CalledProcessError as ex:
-        msg = (ex.stderr or "").strip() or (ex.stdout or "").strip() or str(ex)
-        raise RuntimeError(msg) from ex
 
 
+def get_shelby_bin() -> str:
+    """
+    Use this in all actions that call Shelby.
+    """
+    # AUTO_INSTALL_SHELBY can disable auto install if set to 0/false
+    auto = os.getenv("AUTO_INSTALL_SHELBY", "true").lower() in ("1", "true", "yes", "y")
+    return ensure_shelby_ready(auto_install=auto)
+
+
+# ----------------------------
+# Parse helpers
+# ----------------------------
 def parse_decimal(s: str) -> Optional[Decimal]:
     try:
         return Decimal(s.replace(",", ""))
@@ -175,7 +392,7 @@ def parse_accounts_accounts_section(text: str) -> Dict[str, Dict[str, str]]:
         return {}
 
     accounts: Dict[str, Dict[str, str]] = {}
-    current_alias = ""  # always str, never None (fix pylance warnings)
+    current_alias = ""  # always str, never None
 
     for line in lines[start + 1 :]:
         # stop when another top-level key begins (no indentation)
@@ -242,11 +459,11 @@ def write_pk_yaml(accounts: Dict[str, Dict[str, str]]) -> Path:
 
 def sync_config_to_pk(verbose: bool = True) -> Path:
     """
-    Your required behavior:
+    Required behavior:
     - If pk.txt not exist -> create it
     - Read config.yaml accounts
     - Read pk.txt accounts (if exists)
-    - If there are accounts in config.yaml missing from pk.txt -> add them
+    - If accounts in config.yaml missing from pk.txt -> add them
     - If alias exists in pk but missing address/private_key -> fill it (from config)
     - If mismatch values exist -> DO NOT overwrite, just warn
     """
@@ -311,7 +528,8 @@ def sync_config_to_pk(verbose: bool = True) -> Path:
 # Shelby features (balance, faucet, upload, create)
 # ----------------------------
 def shelby_balance(shelby_bin: str) -> Balance:
-    proc = run_cmd([shelby_bin, "account", "balance"], capture=True, check=True)
+    cmd = build_shelby_cmd(shelby_bin, ["account", "balance"])
+    proc = run_cmd(cmd, capture=True, check=True)
     text = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
     b = Balance(raw_text=text)
 
@@ -342,7 +560,8 @@ def print_balance(b: Balance) -> None:
 
 def get_shelbyusd_faucet_url(shelby_bin: str) -> Optional[str]:
     try:
-        proc = run_cmd([shelby_bin, "faucet", "--no-open"], capture=True, check=True)
+        cmd = build_shelby_cmd(shelby_bin, ["faucet", "--no-open"])
+        proc = run_cmd(cmd, capture=True, check=True)
         text = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
         m = re.search(r"https?://\S+", text)
         return m.group(0) if m else None
@@ -435,11 +654,13 @@ def shelby_upload(shelby_bin: str, src: Path, dst: str, expiration: str, assume_
     if not src.exists():
         raise FileNotFoundError(f"File not found: {src}")
 
-    args = [shelby_bin, "upload"]
+    args = ["upload"]
     if assume_yes:
         args.append("--assume-yes")
     args += [str(src), dst, "--expiration", expiration]
-    run_cmd(args, capture=False, check=True)
+
+    cmd = build_shelby_cmd(shelby_bin, args)
+    run_cmd(cmd, capture=False, check=True)
 
 
 def ask_path(prompt: str) -> Path:
@@ -454,29 +675,30 @@ def ask_expiration() -> str:
 
 
 def shelby_account_create_interactive(shelby_bin: str, name: Optional[str]) -> None:
-    args = [shelby_bin, "account", "create"]
+    args = ["account", "create"]
     if name:
         args += ["--name", name]
     print("\nLaunching Shelby account create wizard...\n")
-    run_cmd(args, capture=False, check=True)
+    cmd = build_shelby_cmd(shelby_bin, args)
+    run_cmd(cmd, capture=False, check=True)
 
 
 # ----------------------------
 # Menu actions
 # ----------------------------
 def action_balance() -> None:
-    shelby_bin = find_shelby_bin()
+    shelby_bin = get_shelby_bin()
     b = shelby_balance(shelby_bin)
     print_balance(b)
 
 
 def action_claim_shelbyusd() -> None:
-    shelby_bin = find_shelby_bin()
+    shelby_bin = get_shelby_bin()
     claim_shelbyusd_faucet(shelby_bin)
 
 
 def action_claim_apt() -> None:
-    shelby_bin = find_shelby_bin()
+    shelby_bin = get_shelby_bin()
     b = shelby_balance(shelby_bin)
     if not b.address:
         print("Could not detect address. Run balance first.")
@@ -491,7 +713,7 @@ def action_claim_apt() -> None:
 
 
 def action_upload_auto() -> None:
-    shelby_bin = find_shelby_bin()
+    shelby_bin = get_shelby_bin()
     src = ask_path(r'Local file path (e.g. D:\DERP_.jpeg) : ')
     expiration = ask_expiration()
     assume_yes = yes_no("Auto-confirm cost? (--assume-yes)", True)
@@ -507,7 +729,7 @@ def action_upload_auto() -> None:
 
 
 def action_upload_custom() -> None:
-    shelby_bin = find_shelby_bin()
+    shelby_bin = get_shelby_bin()
     src = ask_path(r'Local file path (e.g. D:\DERP_.jpeg) : ')
     dst = input("Destination blob name (e.g. images/derp.jpeg) : ").strip()
     if not dst:
@@ -531,7 +753,7 @@ def action_create_wallet_auto_sync() -> None:
         print("Canceled.")
         return
 
-    shelby_bin = find_shelby_bin()
+    shelby_bin = get_shelby_bin()
     name = input("Account alias/name (optional, Enter to skip): ").strip() or None
 
     # create wallet
@@ -566,7 +788,9 @@ Shelby Menu Bot
 
 
 def main() -> int:
-    load_dotenv()
+    # Load .env from the same folder as bot.py (more predictable)
+    load_dotenv(dotenv_path=env_path(), override=False)
+
     clear()
 
     while True:
