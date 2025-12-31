@@ -57,7 +57,7 @@ cd shelby-simple-python
 #### Windows (PowerShell) ✅
 ```powershell
 python -m venv venv
-.env\Scripts\Activate.ps1
+.\venv\Scripts\Activate.ps1
 ```
 
 If you get an error like *“running scripts is disabled”*, run this **once** in the same PowerShell window, then activate again:
